@@ -1,0 +1,21 @@
+import api from './axios'
+
+export function getEventos() {
+  return api.get('/api/eventos').then((response) => response.data)
+}
+
+export function getEventoById(id) {
+  return api.get(`/api/eventos/${id}`).then((response) => response.data)
+}
+
+export function createEvento(payload) {
+  return api.post('/api/eventos', payload).then((response) => response.data)
+}
+
+export function updateEvento(id, payload) {
+  return api.put(`/api/eventos/${id}`, payload).then((response) => response.data)
+}
+
+export function deleteEvento(id) {
+  return api.delete(`/api/eventos/${id}`).then((response) => response.data)
+}
