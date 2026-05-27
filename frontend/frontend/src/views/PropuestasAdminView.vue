@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 
 import AppShell from '../components/layout/AppShell.vue'
 import { aprobarEvento, getEventosPendientes, rechazarEvento } from '../api/eventos.api'
@@ -7,9 +7,14 @@ import { getTipos } from '../api/tipos.api'
 
 const loading = ref(false)
 const submittingId = ref(null)
+const rejectingId = ref(null)
+const rejectForm = ref({ motivo: '' })
+const rejectFieldError = ref('')
+const rejectFormError = ref('')
 const formError = ref('')
 const eventos = ref([])
 const tipos = ref([])
+const rejectTextareaRef = ref(null)
 
 function normalizeCollection(response) {
   if (Array.isArray(response)) {
@@ -97,6 +102,7 @@ function statusLabel(status) {
 
   if (normalized === 'PENDIENTE') return 'Pendiente'
   if (normalized === 'CONFIRMADO') return 'Confirmado'
+  if (normalized === 'RECHAZADO') return 'Rechazado'
   if (normalized === 'CANCELADO') return 'Cancelado'
   return normalized || 'Sin estado'
 }
@@ -110,6 +116,10 @@ function statusClass(status) {
 
   if (normalized === 'CONFIRMADO') {
     return 'admin-proposals__status--success'
+  }
+
+  if (normalized === 'RECHAZADO') {
+    return 'admin-proposals__status--danger'
   }
 
   if (normalized === 'CANCELADO') {
@@ -173,6 +183,60 @@ async function handleAction(action, id) {
   }
 }
 
+function openRejectModal(id) {
+  rejectingId.value = id
+  rejectForm.value = { motivo: '' }
+  rejectFieldError.value = ''
+  rejectFormError.value = ''
+
+  nextTick(() => {
+    rejectTextareaRef.value?.focus?.()
+  })
+}
+
+function closeRejectModal() {
+  rejectingId.value = null
+  rejectForm.value = { motivo: '' }
+  rejectFieldError.value = ''
+  rejectFormError.value = ''
+}
+
+async function submitReject() {
+  const motivo = rejectForm.value.motivo.trim()
+
+  if (!motivo) {
+    rejectFieldError.value = 'El motivo es obligatorio.'
+    return
+  }
+
+  if (motivo.length < 5) {
+    rejectFieldError.value = 'El motivo debe tener al menos 5 caracteres.'
+    return
+  }
+
+  if (!rejectingId.value) {
+    return
+  }
+
+  submittingId.value = rejectingId.value
+  rejectFieldError.value = ''
+  rejectFormError.value = ''
+
+  try {
+    await rechazarEvento(rejectingId.value, { motivo })
+    closeRejectModal()
+    await loadData()
+  } catch (requestError) {
+    rejectFormError.value = requestError?.response?.data?.message || 'No se pudo rechazar la propuesta.'
+  } finally {
+    submittingId.value = null
+  }
+}
+
+function isRejecting(id) {
+  return rejectingId.value === id
+}
+
 onMounted(loadData)
 </script>
 
@@ -208,6 +272,9 @@ onMounted(loadData)
             <p class="admin-proposal__meta">{{ evento.tipoNombre }}</p>
             <p class="admin-proposal__meta">{{ evento.lugar }}</p>
             <p class="admin-proposal__meta">{{ evento.creadorNombre || 'Sin creador' }}</p>
+            <p v-if="evento.motivoRechazo" class="admin-proposal__reason">
+              Motivo rechazo: {{ evento.motivoRechazo }}
+            </p>
           </div>
 
           <div class="admin-proposal__actions">
@@ -226,8 +293,8 @@ onMounted(loadData)
               <button
                 class="btn btn--ghost"
                 type="button"
-                :disabled="submittingId === evento.id"
-                @click="handleAction('rechazar', evento.id)"
+                :disabled="submittingId === evento.id || isRejecting(evento.id)"
+                @click="openRejectModal(evento.id)"
               >
                 Rechazar
               </button>
@@ -236,6 +303,43 @@ onMounted(loadData)
         </article>
       </div>
     </section>
+
+    <Teleport to="body">
+      <div v-if="rejectingId" class="reject-modal__backdrop" @click.self="closeRejectModal">
+        <div class="reject-modal panel" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
+          <header class="reject-modal__header">
+            <div>
+              <p class="eyebrow">Rechazo</p>
+              <h3 id="reject-modal-title">Indica el motivo</h3>
+            </div>
+            <button class="reject-modal__close" type="button" @click="closeRejectModal">×</button>
+          </header>
+
+          <p v-if="rejectFormError" class="reject-modal__error" role="alert">{{ rejectFormError }}</p>
+
+          <label class="reject-modal__field">
+            <span>Motivo *</span>
+            <textarea
+              ref="rejectTextareaRef"
+              v-model="rejectForm.motivo"
+              class="textarea"
+              rows="5"
+              minlength="5"
+              maxlength="500"
+              placeholder="Explica por qué se rechaza la propuesta"
+            />
+            <small v-if="rejectFieldError" class="reject-modal__field-error">{{ rejectFieldError }}</small>
+          </label>
+
+          <footer class="reject-modal__actions">
+            <button class="btn btn--ghost" type="button" @click="closeRejectModal">Cancelar</button>
+            <button class="btn btn--primary" type="button" :disabled="submittingId === rejectingId" @click="submitReject">
+              {{ submittingId === rejectingId ? 'Rechazando...' : 'Rechazar propuesta' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
   </AppShell>
 </template>
 
@@ -329,6 +433,12 @@ onMounted(loadData)
   font-size: 0.86rem;
 }
 
+.admin-proposal__reason {
+  margin: 4px 0 0;
+  color: #7c2d12;
+  font-size: 0.85rem;
+}
+
 .admin-proposal__actions {
   display: grid;
   gap: 10px;
@@ -374,6 +484,82 @@ onMounted(loadData)
   background: var(--bg-soft);
 }
 
+.reject-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.reject-modal {
+  width: min(560px, 100%);
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+
+.reject-modal__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reject-modal__header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.reject-modal__close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+  border-radius: 10px;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reject-modal__error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+.reject-modal__field {
+  display: grid;
+  gap: 8px;
+}
+
+.reject-modal__field span {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.reject-modal__field-error {
+  color: #dc2626;
+  font-size: 0.85rem;
+}
+
+.reject-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 @media (max-width: 860px) {
   .admin-proposals {
     padding: 20px;
@@ -386,6 +572,14 @@ onMounted(loadData)
 
   .admin-proposal__actions {
     justify-items: start;
+  }
+
+  .reject-modal__actions {
+    flex-direction: column;
+  }
+
+  .reject-modal__actions .btn {
+    width: 100%;
   }
 }
 </style>

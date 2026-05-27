@@ -130,6 +130,10 @@ function statusLabel(status) {
     return 'Completado'
   }
 
+  if (normalized === 'RECHAZADO') {
+    return 'Rechazado'
+  }
+
   if (normalized === 'CANCELADO') {
     return 'Cancelado'
   }
@@ -146,6 +150,10 @@ function statusClass(status) {
 
   if (isCompletedStatus(normalized)) {
     return 'dashboard-table__status--success'
+  }
+
+  if (normalized === 'RECHAZADO') {
+    return 'dashboard-table__status--danger'
   }
 
   if (normalized === 'CANCELADO') {

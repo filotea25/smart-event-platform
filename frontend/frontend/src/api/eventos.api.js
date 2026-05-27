@@ -28,8 +28,8 @@ export function aprobarEvento(id) {
   return api.put(`/api/eventos/${id}/aprobar`).then((response) => response.data)
 }
 
-export function rechazarEvento(id) {
-  return api.put(`/api/eventos/${id}/rechazar`).then((response) => response.data)
+export function rechazarEvento(id, payload) {
+  return api.put(`/api/eventos/${id}/rechazar`, payload).then((response) => response.data)
 }
 
 export function deleteEvento(id) {

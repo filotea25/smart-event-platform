@@ -14,6 +14,20 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
 
     List<Evento> findByEstado(EstadoEvento estado);
 
+    @Query("""
+        SELECT CASE WHEN COUNT(e) > 0 THEN true ELSE false END
+        FROM Evento e
+        WHERE LOWER(e.titulo) = LOWER(:titulo)
+          AND e.fechaInicio = :fechaInicio
+          AND e.fechaFin = :fechaFin
+          AND LOWER(e.tipo.nombre) = LOWER(:tipoNombre)
+        """)
+    boolean existsFestivoDuplicado(
+            @Param("titulo") String titulo,
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin,
+            @Param("tipoNombre") String tipoNombre);
+
         @Query("""
             SELECT e
             FROM Evento e

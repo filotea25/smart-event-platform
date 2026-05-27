@@ -15,14 +15,16 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import agenda.dto.ActualizarEventoRequest;
 import agenda.dto.CrearEventoRequest;
 import agenda.dto.EventoResponseDTO;
+import agenda.dto.RechazarEventoRequestDTO;
 import agenda.dto.importacion.ImportarFestivosConfirmarRequestDTO;
+import agenda.dto.importacion.ImportarFestivosConfirmarResponseDTO;
 import agenda.dto.importacion.ImportarFestivosPreviewResponseDTO;
 import agenda.enums.EstadoEvento;
 import agenda.model.Evento;
@@ -83,7 +85,7 @@ public class EventoController {
 
     @PostMapping("/importar-festivos/confirmar")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<EventoResponseDTO>> confirmarImportacionFestivos(
+    public ResponseEntity<ImportarFestivosConfirmarResponseDTO> confirmarImportacionFestivos(
             @Valid @RequestBody ImportarFestivosConfirmarRequestDTO request) {
         return ResponseEntity.ok(eventoService.confirmarImportacionFestivos(request.getEventos()));
     }
@@ -156,8 +158,9 @@ public class EventoController {
 
     @PutMapping("/{id}/rechazar")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<EventoResponseDTO> rechazarEvento(@PathVariable Long id) {
-        return ResponseEntity.ok(eventoService.rechazarEvento(id));
+    public ResponseEntity<EventoResponseDTO> rechazarEvento(@PathVariable Long id,
+            @Valid @RequestBody RechazarEventoRequestDTO request) {
+        return ResponseEntity.ok(eventoService.rechazarEvento(id, request));
     }
 
     /**

@@ -1,6 +1,7 @@
 package agenda.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -48,4 +49,6 @@ public class CrearEventoRequest {
 
     @NotNull(message = "El estado del evento es obligatorio")
     private EstadoEvento estado;
+
+    private List<Long> responsablesIds;
 }

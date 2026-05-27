@@ -10,7 +10,7 @@ import { getUsuarios } from '../api/usuarios.api'
 const route = useRoute()
 const router = useRouter()
 
-const estados = ['PENDIENTE', 'CONFIRMADO', 'CANCELADO']
+const estados = ['PENDIENTE', 'CONFIRMADO', 'RECHAZADO', 'CANCELADO']
 const editingId = computed(() => route.params.id)
 const isEditMode = computed(() => Boolean(editingId.value))
 

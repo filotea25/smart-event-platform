@@ -1,6 +1,10 @@
 package agenda.model;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import agenda.enums.EstadoEvento;
 import jakarta.persistence.Column;
@@ -12,6 +16,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -63,6 +69,15 @@ public class Evento {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "aprobador_id")
     private Usuario aprobador;
+
+    @Column(name = "motivo_rechazo")
+    private String motivoRechazo;
+
+    @JsonIgnore
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "evento_responsables", joinColumns = @JoinColumn(name = "evento_id"), inverseJoinColumns = @JoinColumn(name = "usuario_id"))
+    private List<Usuario> responsables = new ArrayList<>();
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;

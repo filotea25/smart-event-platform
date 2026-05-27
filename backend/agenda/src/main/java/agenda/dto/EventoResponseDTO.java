@@ -1,6 +1,7 @@
 package agenda.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -31,4 +32,6 @@ public class EventoResponseDTO {
     private EstadoEvento estado;
     private Long creadorId;
     private String creadorNombre;
+    private String motivoRechazo;
+    private List<ResponsableDTO> responsables;
 }

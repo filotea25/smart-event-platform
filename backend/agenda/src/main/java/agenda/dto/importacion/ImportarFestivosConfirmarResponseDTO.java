@@ -2,6 +2,7 @@ package agenda.dto.importacion;
 
 import java.util.List;
 
+import agenda.dto.EventoResponseDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,9 +12,9 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ImportarFestivosPreviewResponseDTO {
+public class ImportarFestivosConfirmarResponseDTO {
 
-    private List<ImportarFestivoDTO> eventos;
-    private List<ImportarFestivoErrorDTO> errores;
-    private List<ImportarFestivoErrorDTO> advertencias;
+    private List<EventoResponseDTO> eventos;
+    private int importados;
+    private int omitidosDuplicados;
 }

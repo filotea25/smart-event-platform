@@ -114,6 +114,10 @@ function statusClass(status) {
     return 'propuesta-item__status--success'
   }
 
+  if (normalized === 'RECHAZADO') {
+    return 'propuesta-item__status--danger'
+  }
+
   if (normalized === 'CANCELADO') {
     return 'propuesta-item__status--danger'
   }
@@ -126,6 +130,7 @@ function statusLabel(status) {
 
   if (normalized === 'PENDIENTE') return 'Pendiente'
   if (normalized === 'CONFIRMADO') return 'Confirmado'
+  if (normalized === 'RECHAZADO') return 'Rechazado'
   if (normalized === 'CANCELADO') return 'Cancelado'
   return normalized || 'Sin estado'
 }
@@ -313,6 +318,9 @@ onMounted(async () => {
 
               <p class="propuesta-item__meta">{{ evento.tipoNombre }}</p>
               <p class="propuesta-item__meta">{{ evento.lugar }}</p>
+              <p v-if="evento.motivoRechazo" class="propuesta-item__reason">
+                Motivo de rechazo: {{ evento.motivoRechazo }}
+              </p>
             </div>
 
             <span class="propuesta-item__status" :class="statusClass(evento.estado)">
@@ -454,6 +462,12 @@ onMounted(async () => {
   margin: 0;
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.propuesta-item__reason {
+  margin: 2px 0 0;
+  color: #9a3412;
+  font-size: 0.85rem;
 }
 
 .propuesta-item__status {

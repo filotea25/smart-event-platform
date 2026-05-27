@@ -12,8 +12,11 @@ const preview = ref(null)
 const formError = ref('')
 const successMessage = ref('')
 
-const hasPreview = computed(() => Boolean(preview.value?.eventos?.length))
-const hasErrors = computed(() => Boolean(preview.value?.errores?.length))
+const previewEventos = computed(() => (Array.isArray(preview.value?.eventos) ? preview.value.eventos : []))
+const previewErrores = computed(() => (Array.isArray(preview.value?.errores) ? preview.value.errores : []))
+const previewAdvertencias = computed(() => (Array.isArray(preview.value?.advertencias) ? preview.value.advertencias : []))
+const hasPreview = computed(() => Boolean(preview.value))
+const hasErrors = computed(() => previewErrores.value.length > 0)
 const canConfirm = computed(() => hasPreview.value && !hasErrors.value && !loadingConfirm.value)
 
 function handleFileChange(event) {
@@ -47,7 +50,12 @@ async function handlePreview() {
   try {
     const formData = new FormData()
     formData.append('archivo', selectedFile.value)
-    preview.value = await previewImportarFestivos(formData)
+    const response = await previewImportarFestivos(formData)
+    preview.value = {
+      eventos: Array.isArray(response?.eventos) ? response.eventos : [],
+      errores: Array.isArray(response?.errores) ? response.errores : [],
+      advertencias: Array.isArray(response?.advertencias) ? response.advertencias : [],
+    }
   } catch (requestError) {
     preview.value = null
     formError.value = requestError?.response?.data?.message || 'No se pudo generar la preview del CSV.'
@@ -66,8 +74,10 @@ async function handleConfirm() {
   successMessage.value = ''
 
   try {
-    const resultado = await confirmarImportarFestivos({ eventos: preview.value.eventos })
-    successMessage.value = `Importación completada: ${resultado.length} festivos creados correctamente.`
+    const resultado = await confirmarImportarFestivos({ eventos: previewEventos.value })
+    const importados = Number(resultado?.importados ?? resultado?.eventos?.length ?? 0)
+    const omitidosDuplicados = Number(resultado?.omitidosDuplicados ?? 0)
+    successMessage.value = `Importación completada: ${importados} festivos creados correctamente${omitidosDuplicados > 0 ? `, ${omitidosDuplicados} omitidos por duplicado` : ''}.`
     resetState()
   } catch (requestError) {
     formError.value = requestError?.response?.data?.message || 'No se pudo confirmar la importación.'
@@ -127,14 +137,18 @@ function formatDate(value) {
       <div v-if="preview" class="import-festivos__preview">
         <div class="import-festivos__preview-header">
           <h3>Preview de eventos</h3>
-          <span class="import-festivos__badge">{{ preview.eventos.length }} válidos</span>
+          <span class="import-festivos__badge">{{ previewEventos.length }} válidos</span>
         </div>
 
         <p v-if="hasErrors" class="import-festivos__warning">
           Hay errores en el CSV. Corrígelo antes de confirmar la importación.
         </p>
 
-        <div v-if="preview.eventos.length > 0" class="table-wrap">
+        <p v-else-if="previewAdvertencias.length" class="import-festivos__warning">
+          Hay festivos duplicados que se omitirán al confirmar la importación.
+        </p>
+
+        <div v-if="previewEventos.length > 0" class="table-wrap">
           <table class="table import-festivos__table">
             <thead>
               <tr>
@@ -146,7 +160,7 @@ function formatDate(value) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="evento in preview.eventos" :key="`${evento.linea}-${evento.titulo}`">
+              <tr v-for="evento in previewEventos" :key="`${evento.linea}-${evento.titulo}`">
                 <td>{{ evento.linea }}</td>
                 <td>{{ formatDate(evento.fechaInicio) }}</td>
                 <td>{{ formatDate(evento.fechaFin) }}</td>
@@ -157,16 +171,25 @@ function formatDate(value) {
           </table>
         </div>
 
-        <div v-if="preview.errores?.length" class="import-festivos__errors">
+        <div v-if="previewErrores.length" class="import-festivos__errors">
           <h4>Errores de validación</h4>
           <ul>
-            <li v-for="error in preview.errores" :key="`${error.linea}-${error.mensaje}`">
+            <li v-for="error in previewErrores" :key="`${error.linea}-${error.mensaje}`">
               Línea {{ error.linea }}: {{ error.mensaje }}
             </li>
           </ul>
         </div>
 
-        <div class="import-festivos__confirm">
+        <div v-if="previewAdvertencias.length" class="import-festivos__errors">
+          <h4>Advertencias</h4>
+          <ul>
+            <li v-for="warning in previewAdvertencias" :key="`${warning.linea}-${warning.mensaje}`">
+              Línea {{ warning.linea }}: {{ warning.mensaje }}
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="hasPreview" class="import-festivos__confirm">
           <button class="btn btn--primary" type="button" :disabled="!canConfirm" @click="handleConfirm">
             {{ loadingConfirm ? 'Confirmando...' : 'Confirmar importación' }}
           </button>

@@ -22,7 +22,27 @@ function normalizeEvento(evento) {
     fechaFin: evento.fechaFin ?? evento.fecha_fin ?? evento.endDate ?? '',
     lugar: evento.lugar ?? evento.ubicacion ?? evento.location ?? '-',
     estado: evento.estado ?? evento.estadoEvento ?? '-',
+    motivoRechazo: evento.motivoRechazo ?? evento.motivo_rechazo ?? '',
   }
+}
+
+function statusLabel(status) {
+  const normalized = String(status || '').toUpperCase()
+
+  if (normalized === 'PENDIENTE') return 'Pendiente'
+  if (normalized === 'CONFIRMADO') return 'Confirmado'
+  if (normalized === 'RECHAZADO') return 'Rechazado'
+  if (normalized === 'CANCELADO') return 'Cancelado'
+  return normalized || 'Sin estado'
+}
+
+function statusClass(status) {
+  const normalized = String(status || '').toUpperCase()
+
+  if (normalized === 'PENDIENTE') return 'evento-card__estado--warning'
+  if (normalized === 'CONFIRMADO') return 'evento-card__estado--success'
+  if (normalized === 'RECHAZADO' || normalized === 'CANCELADO') return 'evento-card__estado--danger'
+  return 'evento-card__estado--neutral'
 }
 
 function formatDate(value) {
@@ -119,7 +139,7 @@ onMounted(loadEventos)
             <h3 class="evento-card__title">{{ evento.titulo }}</h3>
           </div>
 
-          <span class="evento-card__estado">{{ evento.estado }}</span>
+          <span class="evento-card__estado" :class="statusClass(evento.estado)">{{ statusLabel(evento.estado) }}</span>
         </div>
 
         <dl class="evento-card__details">
@@ -136,6 +156,10 @@ onMounted(loadEventos)
             <dd>{{ evento.lugar }}</dd>
           </div>
         </dl>
+
+        <p v-if="evento.motivoRechazo" class="evento-card__reason">
+          Motivo de rechazo: {{ evento.motivoRechazo }}
+        </p>
 
         <div class="evento-card__actions">
           <RouterLink
@@ -246,12 +270,43 @@ onMounted(loadEventos)
 .evento-card__estado {
   padding: 0.4rem 0.7rem;
   border-radius: 6px;
-  background: #dcfce7;
-  color: #166534;
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.evento-card__estado--warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.evento-card__estado--success {
+  background: #dcfce7;
+  color: #166534;
   border: 1px solid #bbf7d0;
+}
+
+.evento-card__estado--danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.evento-card__estado--neutral {
+  background: var(--bg-soft);
+  color: #4b5563;
+  border: 1px solid #e6f0eb;
+}
+
+.evento-card__reason {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 0.9rem;
 }
 
 .evento-card__details {

@@ -8,6 +8,8 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -21,8 +23,11 @@ import org.springframework.security.core.userdetails.UserDetails;
 import agenda.dto.ActualizarEventoRequest;
 import agenda.dto.CrearEventoRequest;
 import agenda.dto.EventoResponseDTO;
+import agenda.dto.ResponsableDTO;
+import agenda.dto.RechazarEventoRequestDTO;
 import agenda.dto.importacion.ImportarFestivoDTO;
 import agenda.dto.importacion.ImportarFestivoErrorDTO;
+import agenda.dto.importacion.ImportarFestivosConfirmarResponseDTO;
 import agenda.dto.importacion.ImportarFestivosPreviewResponseDTO;
 import agenda.enums.EstadoEvento;
 import agenda.exception.BusinessException;
@@ -100,6 +105,7 @@ public class EventoService {
 
             List<ImportarFestivoDTO> eventos = new ArrayList<>();
             List<ImportarFestivoErrorDTO> errores = new ArrayList<>();
+            List<ImportarFestivoErrorDTO> advertencias = new ArrayList<>();
 
             for (int indice = 1; indice < lineas.size(); indice++) {
                 String linea = lineas.get(indice).trim();
@@ -108,7 +114,16 @@ public class EventoService {
                 }
 
                 try {
-                    eventos.add(parsearLineaFestivo(linea, indice + 1));
+                    ImportarFestivoDTO festivo = parsearLineaFestivo(linea, indice + 1);
+                    if (esFestivoDuplicado(festivo)) {
+                        advertencias.add(ImportarFestivoErrorDTO.builder()
+                                .linea(indice + 1)
+                                .mensaje("Este festivo ya existe y se omitirá al confirmar la importación")
+                                .build());
+                        continue;
+                    }
+
+                    eventos.add(festivo);
                 } catch (BusinessException ex) {
                     errores.add(ImportarFestivoErrorDTO.builder()
                             .linea(indice + 1)
@@ -120,6 +135,7 @@ public class EventoService {
             return ImportarFestivosPreviewResponseDTO.builder()
                     .eventos(eventos)
                     .errores(errores)
+                    .advertencias(advertencias)
                     .build();
         } catch (IOException ex) {
             throw new BusinessException("CSV_LECTURA_ERROR", "No se pudo leer el archivo CSV");
@@ -127,7 +143,7 @@ public class EventoService {
     }
 
     @Transactional
-    public List<EventoResponseDTO> confirmarImportacionFestivos(List<ImportarFestivoDTO> eventosImportados) {
+    public ImportarFestivosConfirmarResponseDTO confirmarImportacionFestivos(List<ImportarFestivoDTO> eventosImportados) {
         if (eventosImportados == null || eventosImportados.isEmpty()) {
             throw new BusinessException("IMPORTACION_VACIA", "No se enviaron festivos para importar");
         }
@@ -138,9 +154,18 @@ public class EventoService {
                         "No se pudo identificar al usuario autenticado para registrar la importación"));
 
         List<EventoResponseDTO> importados = new ArrayList<>();
+        int omitidosDuplicados = 0;
+        List<String> clavesProcesadas = new ArrayList<>();
 
         for (ImportarFestivoDTO festivo : eventosImportados) {
             validarImportacionFestivo(festivo);
+
+            if (esFestivoDuplicado(festivo) || clavesProcesadas.contains(claveFestivo(festivo))) {
+                omitidosDuplicados++;
+                continue;
+            }
+
+            clavesProcesadas.add(claveFestivo(festivo));
 
             Evento evento = Evento.builder()
                     .tipo(tipoFestivo)
@@ -160,7 +185,11 @@ public class EventoService {
             importados.add(convertirAResponse(guardado));
         }
 
-        return importados;
+        return ImportarFestivosConfirmarResponseDTO.builder()
+                .eventos(importados)
+                .importados(importados.size())
+                .omitidosDuplicados(omitidosDuplicados)
+                .build();
     }
 
     /**
@@ -197,6 +226,9 @@ public class EventoService {
         // Actualizar campos
         evento.setTipo(tipo);
         evento.setCreador(creador);
+        if (request.getResponsablesIds() != null) {
+            evento.setResponsables(validarYObtenerResponsables(request.getResponsablesIds()));
+        }
         evento.setTitulo(request.getTitulo());
         evento.setDescripcion(request.getDescripcion());
         evento.setFechaInicio(request.getFechaInicio());
@@ -246,11 +278,12 @@ public class EventoService {
     }
 
     @Transactional
-    public EventoResponseDTO rechazarEvento(Long id) {
+    public EventoResponseDTO rechazarEvento(Long id, RechazarEventoRequestDTO request) {
         Evento evento = eventoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Evento", "id", id));
 
-        evento.setEstado(EstadoEvento.CANCELADO);
+        evento.setEstado(EstadoEvento.RECHAZADO);
+        evento.setMotivoRechazo(request.getMotivo().trim());
         evento.setFechaAprobacion(LocalDateTime.now());
         evento.setAprobador(obtenerUsuarioAutenticado().orElse(evento.getAprobador()));
 
@@ -332,7 +365,24 @@ public class EventoService {
                 .estado(evento.getEstado())
                 .creadorId(creador != null ? creador.getId() : null)
                 .creadorNombre(creador != null ? creador.getNombre() : null)
+                .motivoRechazo(evento.getMotivoRechazo())
+                .responsables(convertirResponsablesAResponse(evento.getResponsables()))
                 .build();
+    }
+
+    private List<ResponsableDTO> convertirResponsablesAResponse(List<Usuario> responsables) {
+        if (responsables == null) {
+            return new ArrayList<>();
+        }
+
+        return responsables.stream()
+                .filter(Objects::nonNull)
+                .map(usuario -> ResponsableDTO.builder()
+                        .id(usuario.getId())
+                        .nombre(usuario.getNombre())
+                        .email(usuario.getEmail())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     /**
@@ -407,6 +457,38 @@ public class EventoService {
         log.debug("Validación exitosa: Usuario válido: {}", usuario.getNombre());
         return usuario;
     }
+
+    private List<Usuario> validarYObtenerResponsables(List<Long> responsablesIds) {
+        if (responsablesIds == null) {
+            return new ArrayList<>();
+        }
+
+        if (responsablesIds.stream().anyMatch(Objects::isNull)) {
+            throw new BusinessException("RESPONSABLES_INVALIDOS",
+                    "La lista de responsables contiene identificadores nulos");
+        }
+
+        List<Long> idsUnicos = responsablesIds.stream().distinct().collect(Collectors.toList());
+        List<Usuario> usuarios = usuarioRepository.findAllById(idsUnicos);
+        Map<Long, Usuario> usuariosPorId = usuarios.stream()
+                .collect(Collectors.toMap(Usuario::getId, usuario -> usuario));
+
+        List<Long> idsNoEncontrados = idsUnicos.stream()
+                .filter(id -> !usuariosPorId.containsKey(id))
+                .collect(Collectors.toList());
+
+        if (!idsNoEncontrados.isEmpty()) {
+            String idsTexto = idsNoEncontrados.stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(", "));
+            throw new BusinessException("RESPONSABLES_NO_ENCONTRADOS",
+                    "No existen usuarios con los ids: " + idsTexto);
+        }
+
+        return idsUnicos.stream()
+                .map(usuariosPorId::get)
+                .collect(Collectors.toList());
+    }
     
     /**
      * Valida el rango de fechas del evento.
@@ -448,6 +530,7 @@ public class EventoService {
         Evento evento = Evento.builder()
             .tipo(tipo)
             .creador(creador)
+            .responsables(validarYObtenerResponsables(request.getResponsablesIds()))
             .titulo(request.getTitulo())
             .descripcion(request.getDescripcion())
             .fechaInicio(request.getFechaInicio())
@@ -571,15 +654,46 @@ public class EventoService {
 
     private TipoEvento obtenerTipoFestivo() {
         TipoEvento tipoFestivo = tipoEventoRepository.findByNombreIgnoreCase("Festivo")
-                .orElseThrow(() -> new BusinessException("TIPO_FESTIVO_NO_ENCONTRADO",
-                        "No existe un tipo de evento llamado Festivo"));
+                .orElseGet(() -> TipoEvento.builder()
+                        .nombre("Festivo")
+                        .color("#EF4444")
+                        .icono("calendar")
+                        .prioridad(1)
+                        .activo(true)
+                        .build());
 
-        if (!tipoFestivo.isActivo()) {
-            throw new BusinessException("TIPO_FESTIVO_INACTIVO",
-                    "El tipo de evento Festivo existe pero está inactivo");
+        boolean necesitaNormalizacion = tipoFestivo.getId() == null
+                || !"Festivo".equals(tipoFestivo.getNombre())
+                || !"#EF4444".equalsIgnoreCase(tipoFestivo.getColor())
+                || !"calendar".equalsIgnoreCase(tipoFestivo.getIcono())
+                || tipoFestivo.getPrioridad() != 1
+                || !tipoFestivo.isActivo();
+
+        if (necesitaNormalizacion) {
+            tipoFestivo.setNombre("Festivo");
+            tipoFestivo.setColor("#EF4444");
+            tipoFestivo.setIcono("calendar");
+            tipoFestivo.setPrioridad(1);
+            tipoFestivo.setActivo(true);
+            tipoFestivo = tipoEventoRepository.save(tipoFestivo);
         }
 
         return tipoFestivo;
+    }
+
+    private boolean esFestivoDuplicado(ImportarFestivoDTO festivo) {
+        return eventoRepository.existsFestivoDuplicado(
+                festivo.getTitulo().trim(),
+                festivo.getFechaInicio().atStartOfDay(),
+                festivo.getFechaFin().atTime(LocalTime.of(23, 59, 59)),
+                "Festivo");
+    }
+
+    private String claveFestivo(ImportarFestivoDTO festivo) {
+        return String.join("|",
+                festivo.getTitulo().trim().toLowerCase(),
+                festivo.getFechaInicio().toString(),
+                festivo.getFechaFin().toString());
     }
 
     private void validarImportacionFestivo(ImportarFestivoDTO festivo) {

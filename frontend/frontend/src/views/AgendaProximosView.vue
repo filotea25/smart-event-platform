@@ -193,6 +193,10 @@ function statusLabel(status) {
     return 'Confirmado'
   }
 
+  if (normalized === 'RECHAZADO') {
+    return 'Rechazado'
+  }
+
   if (normalized === 'CANCELADO') {
     return 'Cancelado'
   }
@@ -209,6 +213,10 @@ function statusClass(status) {
 
   if (normalized === 'CONFIRMADO') {
     return 'agenda-item__status--success'
+  }
+
+  if (normalized === 'RECHAZADO') {
+    return 'agenda-item__status--danger'
   }
 
   if (normalized === 'CANCELADO') {
